@@ -1,0 +1,8 @@
+# This project is a Node.js/Next.js application.
+# Dependencies are managed in package.json.
+# This file is created as requested, but typically relevant for Python environments.
+
+# System Requirements (inferred from package.json):
+# Node.js
+# React ^19.0.0
+# Next.js ^16.0.0
