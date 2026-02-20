@@ -1,13 +1,16 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import {
   AlertTriangle,
   CheckCircle,
   Clock,
   TrendingUp,
-  TrendingDown,
   Activity,
   Zap,
+  Users,
+  Database,
+  FlaskConical,
 } from "lucide-react";
 import {
   AreaChart,
@@ -19,292 +22,351 @@ import {
   ResponsiveContainer,
   BarChart,
   Bar,
+  PieChart,
+  Pie,
+  Cell,
+  Legend,
 } from "recharts";
-
-const requestsData = [
-  { time: "00:00", requests: 12400, errors: 45 },
-  { time: "04:00", requests: 8200, errors: 23 },
-  { time: "08:00", requests: 24500, errors: 89 },
-  { time: "12:00", requests: 31200, errors: 124 },
-  { time: "16:00", requests: 28900, errors: 98 },
-  { time: "20:00", requests: 19800, errors: 67 },
-  { time: "Now", requests: 22100, errors: 72 },
-];
-
-const latencyData = [
-  { service: "API Gateway", p50: 45, p95: 142, p99: 289 },
-  { service: "Auth", p50: 23, p95: 67, p99: 134 },
-  { service: "Database", p50: 12, p95: 34, p99: 78 },
-  { service: "Cache", p50: 2, p95: 8, p99: 15 },
-  { service: "CDN", p50: 18, p95: 45, p99: 92 },
-];
-
-const metrics = [
-  {
-    label: "Active Incidents",
-    value: "3",
-    change: "+2",
-    trend: "up",
-    icon: AlertTriangle,
-    color: "text-destructive",
-    bgColor: "bg-destructive/10",
-  },
-  {
-    label: "Deployments Today",
-    value: "8",
-    change: "+3",
-    trend: "up",
-    icon: Zap,
-    color: "text-chart-1",
-    bgColor: "bg-chart-1/10",
-  },
-  {
-    label: "Error Rate",
-    value: "0.42%",
-    change: "-0.12%",
-    trend: "down",
-    icon: Activity,
-    color: "text-success",
-    bgColor: "bg-success/10",
-  },
-  {
-    label: "Uptime (30d)",
-    value: "99.98%",
-    change: "+0.01%",
-    trend: "up",
-    icon: CheckCircle,
-    color: "text-success",
-    bgColor: "bg-success/10",
-  },
-];
-
-const activeIncidents = [
-  {
-    id: "INC-2847",
-    title: "Database latency spike in us-east-1",
-    severity: "high",
-    duration: "23 min",
-    assignee: "Sarah M.",
-  },
-  {
-    id: "INC-2846",
-    title: "Payment gateway timeout errors",
-    severity: "critical",
-    duration: "45 min",
-    assignee: "Mike C.",
-  },
-  {
-    id: "INC-2845",
-    title: "CDN cache invalidation delay",
-    severity: "medium",
-    duration: "1h 12m",
-    assignee: "Lisa P.",
-  },
-];
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  fetchHealth,
+  fetchStats,
+  fetchPredictionsOverTime,
+  fetchRequestStats,
+  fetchContactRequests,
+  fetchDatasetRequests,
+  fetchNanoparticleTypes,
+  type HealthStatus,
+  type Stats,
+  type PredictionDataPoint,
+  type RequestStats,
+  type ContactRequest,
+  type DatasetRequest,
+  type NanoparticleType,
+} from "@/lib/api";
 
 const cardShadow = "rgba(14, 63, 126, 0.04) 0px 0px 0px 1px, rgba(42, 51, 69, 0.04) 0px 1px 1px -0.5px, rgba(42, 51, 70, 0.04) 0px 3px 3px -1.5px, rgba(42, 51, 70, 0.04) 0px 6px 6px -3px, rgba(14, 63, 126, 0.04) 0px 12px 12px -6px, rgba(14, 63, 126, 0.04) 0px 24px 24px -12px";
 
 export function OverviewContent() {
+  const [stats, setStats] = useState<Stats | null>(null);
+  const [health, setHealth] = useState<HealthStatus | null>(null);
+  const [predictions, setPredictions] = useState<PredictionDataPoint[]>([]);
+  const [requestStats, setRequestStats] = useState<RequestStats | null>(null);
+  const [contactRequests, setContactRequests] = useState<ContactRequest[]>([]);
+  const [datasetRequests, setDatasetRequests] = useState<DatasetRequest[]>([]);
+  const [nanoparticleTypes, setNanoparticleTypes] = useState<NanoparticleType[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function loadData() {
+      try {
+        const [
+          statsData,
+          healthData,
+          predictionsData,
+          reqStatsData,
+          contactData,
+          datasetData,
+          nanoData,
+        ] = await Promise.all([
+          fetchStats(),
+          fetchHealth(),
+          fetchPredictionsOverTime(),
+          fetchRequestStats(),
+          fetchContactRequests(),
+          fetchDatasetRequests(),
+          fetchNanoparticleTypes(),
+        ]);
+
+        setStats(statsData);
+        setHealth(healthData);
+        setPredictions(predictionsData);
+        setRequestStats(reqStatsData);
+        setContactRequests(contactData);
+        setDatasetRequests(datasetData);
+        setNanoparticleTypes(nanoData);
+      } catch (error) {
+        console.error("Failed to load dashboard data:", error);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    loadData();
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+
+  // Calculate generic metrics for display
+  const metrics = [
+    {
+      label: "Active Incidents",
+      value: "3", // Hardcoded for aesthetic match
+      change: "+2",
+      trend: "up", // Bad thing for incidents
+      icon: AlertTriangle,
+      color: "text-red-500",
+      bgColor: "bg-red-500/10",
+      wrapperClass: "border-l-4 border-l-red-500",
+    },
+    {
+      label: "Deployments Today",
+      value: "8", // Hardcoded for aesthetic match
+      change: "+3",
+      trend: "up", // Good thing
+      icon: Zap,
+      color: "text-blue-500",
+      bgColor: "bg-blue-500/10",
+      wrapperClass: "border-l-4 border-l-blue-500",
+    },
+    {
+      label: "Error Rate",
+      value: "0.42%", // Hardcoded for aesthetic match
+      change: "-0.12%",
+      trend: "down", // Good thing
+      icon: Activity,
+      color: "text-emerald-500",
+      bgColor: "bg-emerald-500/10",
+      wrapperClass: "border-l-4 border-l-emerald-500",
+    },
+    {
+      label: "Uptime (30d)",
+      value: "99.98%",
+      change: "+0.01%",
+      trend: "up",
+      icon: CheckCircle,
+      color: "text-emerald-500",
+      bgColor: "bg-emerald-500/10",
+      wrapperClass: "border-l-4 border-l-emerald-500",
+    },
+  ];
+
   return (
-    <div className="space-y-6">
-      {/* Metrics Grid */}
-      <div className="grid grid-cols-4 gap-4">
+    <div className="space-y-6 pb-10">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-semibold tracking-tight">System Overview</h2>
+          <p className="text-sm text-muted-foreground mt-1">Real-time Engineering Metrics</p>
+        </div>
+        <div className="flex gap-2">
+           <button className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 px-4 py-2 gap-2">
+             <Clock className="w-4 h-4" />
+             Last 24 hours
+           </button>
+           <button className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-destructive text-destructive-foreground hover:bg-destructive/90 h-9 px-4 py-2 gap-2 shadow-sm">
+             <AlertTriangle className="w-4 h-4" />
+             Report Incident
+           </button>
+        </div>
+      </div>
+
+      {/* KPI Cards - Aesthetic update */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {metrics.map((metric) => {
           const Icon = metric.icon;
+          const isPositiveTrend = metric.trend === "up" && metric.label !== "Active Incidents" && metric.label !== "Error Rate";
+          // Logic: Incidents UP is BAD. Error Rate UP is BAD. Uptime UP is GOOD. Deployments UP is GOOD.
+          
+          let trendColor = "text-emerald-500";
+          if (metric.label === "Active Incidents" && metric.change.startsWith("+")) trendColor = "text-red-500";
+          if (metric.label === "Error Rate" && metric.change.startsWith("-")) trendColor = "text-emerald-500";
+          
           return (
             <div
               key={metric.label}
-              className="bg-card rounded-2xl p-5 border border-border"
-              style={{ boxShadow: cardShadow }}
+              className="bg-card rounded-xl p-5 border shadow-sm relative overflow-hidden transition-all hover:shadow-md"
             >
-              <div className="flex items-start justify-between mb-3">
-                <div className={`p-2.5 rounded-xl ${metric.bgColor}`}>
-                  <Icon className={`w-5 h-5 ${metric.color}`} />
-                </div>
-                <div className={`flex items-center gap-1 text-sm ${
-                  metric.trend === "down" && metric.label !== "Error Rate"
-                    ? "text-destructive"
-                    : metric.trend === "down" && metric.label === "Error Rate"
-                      ? "text-success"
-                      : metric.label === "Active Incidents"
-                        ? "text-destructive"
-                        : "text-success"
-                }`}>
-                  {metric.trend === "up" ? (
-                    <TrendingUp className="w-4 h-4" />
-                  ) : (
-                    <TrendingDown className="w-4 h-4" />
-                  )}
-                  <span className="font-medium">{metric.change}</span>
-                </div>
+              <div className="flex justify-between items-start mb-4">
+                 <div className={`p-2.5 rounded-lg ${metric.bgColor}`}>
+                    <Icon className={`w-5 h-5 ${metric.color}`} />
+                 </div>
+                 <div className={`flex items-center text-xs font-bold ${trendColor}`}>
+                    {metric.change.startsWith("+") ? <TrendingUp className="w-3 h-3 mr-1" /> : <TrendingUp className="w-3 h-3 mr-1 rotate-180" />}
+                    {metric.change}
+                 </div>
               </div>
-              <p className="text-2xl font-semibold text-foreground mb-1">
-                {metric.value}
-              </p>
-              <p className="text-sm text-muted-foreground">{metric.label}</p>
+              <div>
+                <h3 className="text-3xl font-bold tracking-tight text-foreground">{metric.value}</h3>
+                <p className="text-sm font-medium text-muted-foreground mt-1">{metric.label}</p>
+              </div>
             </div>
           );
         })}
       </div>
 
-      {/* Charts Row */}
-      <div className="grid grid-cols-3 gap-4">
-        {/* Requests Chart */}
-        <div
-          className="col-span-2 bg-card rounded-2xl p-6 border border-border"
-          style={{ boxShadow: cardShadow }}
-        >
-          <div className="flex items-center justify-between mb-6">
-            <div>
-              <h3 className="text-base font-semibold text-foreground">Request Volume</h3>
-              <p className="text-sm text-muted-foreground">Requests per hour</p>
-            </div>
-            <div className="flex items-center gap-4 text-sm">
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full bg-chart-1" />
-                <span className="text-muted-foreground">Requests</span>
-              </div>
-            </div>
-          </div>
-          <div className="h-[240px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={requestsData}>
-                <defs>
-                  <linearGradient id="requestsGradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="oklch(0.55 0.18 250)" stopOpacity={0.2} />
-                    <stop offset="95%" stopColor="oklch(0.55 0.18 250)" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.92 0.005 250)" />
-                <XAxis 
-                  dataKey="time" 
-                  tick={{ fill: "oklch(0.55 0.01 250)", fontSize: 12 }}
-                  axisLine={{ stroke: "oklch(0.92 0.005 250)" }}
-                />
-                <YAxis 
-                  tick={{ fill: "oklch(0.55 0.01 250)", fontSize: 12 }}
-                  axisLine={{ stroke: "oklch(0.92 0.005 250)" }}
-                />
-                <Tooltip 
-                  contentStyle={{
-                    backgroundColor: "white",
-                    border: "1px solid oklch(0.92 0.005 250)",
-                    borderRadius: "12px",
-                    boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
-                  }}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="requests"
-                  stroke="oklch(0.55 0.18 250)"
-                  strokeWidth={2}
-                  fill="url(#requestsGradient)"
-                />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        {/* Active Incidents */}
-        <div
-          className="bg-card rounded-2xl p-6 border border-border"
-          style={{ boxShadow: cardShadow }}
-        >
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-base font-semibold text-foreground">Active Incidents</h3>
-            <span className="px-2 py-1 text-xs font-medium bg-destructive/10 text-destructive rounded-full">
-              {activeIncidents.length} open
-            </span>
-          </div>
-          <div className="space-y-3">
-            {activeIncidents.map((incident) => (
-              <div
-                key={incident.id}
-                className="p-3 rounded-xl bg-muted/50 hover:bg-muted transition-colors cursor-pointer"
-              >
-                <div className="flex items-start justify-between mb-2">
-                  <span className={`px-2 py-0.5 text-[10px] font-semibold uppercase rounded-full ${
-                    incident.severity === "critical"
-                      ? "bg-destructive/20 text-destructive"
-                      : incident.severity === "high"
-                        ? "bg-warning/20 text-warning"
-                        : "bg-muted-foreground/20 text-muted-foreground"
-                  }`}>
-                    {incident.severity}
-                  </span>
-                  <span className="text-xs text-muted-foreground font-mono">{incident.id}</span>
+      {/* Main Charts Row */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        
+        {/* Request Volume Chart (Takes up 2 cols) */}
+        <Card className="lg:col-span-2 border shadow-sm rounded-xl overflow-hidden">
+             <CardHeader className="flex flex-row items-center justify-between pb-2">
+                 <div className="space-y-1">
+                     <CardTitle className="text-base font-semibold">Request Volume</CardTitle>
+                     <CardDescription>Requests per hour</CardDescription>
+                 </div>
+                 <div className="flex items-center gap-2">
+                    <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                        <span className="w-2 h-2 rounded-full bg-blue-500"></span>
+                        Requests
+                    </span>
+                 </div>
+             </CardHeader>
+             <CardContent>
+                <div className="h-[500px] w-full mt-4">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={predictions}>
+                      <defs>
+                        <linearGradient id="colorRequests" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
+                          <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
+                      <XAxis 
+                        dataKey="date" 
+                        axisLine={false}
+                        tickLine={false}
+                        tick={{ fill: 'var(--muted-foreground)', fontSize: 12 }}
+                        dy={10}
+                      />
+                      <YAxis 
+                        axisLine={false}
+                        tickLine={false}
+                        tick={{ fill: 'var(--muted-foreground)', fontSize: 12 }}
+                      />
+                      <Tooltip 
+                        contentStyle={{ 
+                            backgroundColor: 'var(--card)', 
+                            border: '1px solid var(--border)',
+                            borderRadius: '8px' 
+                        }}
+                      />
+                      <Area 
+                        type="monotone" 
+                        dataKey="count" 
+                        stroke="#3b82f6" 
+                        strokeWidth={2}
+                        fillOpacity={1} 
+                        fill="url(#colorRequests)" 
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
                 </div>
-                <p className="text-sm font-medium text-foreground mb-2 line-clamp-2">
-                  {incident.title}
-                </p>
-                <div className="flex items-center justify-between text-xs text-muted-foreground">
-                  <div className="flex items-center gap-1">
-                    <Clock className="w-3 h-3" />
-                    {incident.duration}
-                  </div>
-                  <span>{incident.assignee}</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
+             </CardContent>
+          </Card>
 
-      {/* Service Latency */}
-      <div
-        className="bg-card rounded-2xl p-6 border border-border"
-        style={{ boxShadow: cardShadow }}
-      >
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h3 className="text-base font-semibold text-foreground">Service Latency</h3>
-            <p className="text-sm text-muted-foreground">P50, P95, P99 latency by service (ms)</p>
-          </div>
-          <div className="flex items-center gap-4 text-sm">
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded-full bg-chart-2" />
-              <span className="text-muted-foreground">P50</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded-full bg-chart-1" />
-              <span className="text-muted-foreground">P95</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded-full bg-chart-3" />
-              <span className="text-muted-foreground">P99</span>
-            </div>
-          </div>
-        </div>
-        <div className="h-[200px]">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={latencyData} layout="vertical" barCategoryGap="20%">
-              <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.92 0.005 250)" horizontal={false} />
-              <XAxis 
-                type="number" 
-                tick={{ fill: "oklch(0.55 0.01 250)", fontSize: 12 }}
-                axisLine={{ stroke: "oklch(0.92 0.005 250)" }}
-              />
-              <YAxis 
-                dataKey="service" 
-                type="category"
-                tick={{ fill: "oklch(0.55 0.01 250)", fontSize: 12 }}
-                axisLine={{ stroke: "oklch(0.92 0.005 250)" }}
-                width={100}
-              />
-              <Tooltip
-                contentStyle={{
-                  backgroundColor: "white",
-                  border: "1px solid oklch(0.92 0.005 250)",
-                  borderRadius: "12px",
-                  boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
-                }}
-              />
-              <Bar dataKey="p50" fill="oklch(0.65 0.15 155)" radius={[0, 4, 4, 0]} />
-              <Bar dataKey="p95" fill="oklch(0.55 0.18 250)" radius={[0, 4, 4, 0]} />
-              <Bar dataKey="p99" fill="oklch(0.7 0.18 350)" radius={[0, 4, 4, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
+        {/* Active Incidents List (Takes up 1 col) */}
+        <Card className="border shadow-sm rounded-xl overflow-hidden flex flex-col h-full">
+            <CardHeader className="pb-3 border-b bg-muted/40">
+                <div className="flex items-center justify-between">
+                    <CardTitle className="text-base font-semibold">Active Incidents</CardTitle>
+                    <span className="bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 text-xs font-bold px-2 py-1 rounded-full border border-red-200 dark:border-red-800">3 open</span>
+                </div>
+            </CardHeader>
+            <CardContent className="flex-1 overflow-auto p-0">
+                <div className="divide-y divide-border">
+                    {/* Dummy Incident 1 */}
+                    <div className="p-4 hover:bg-muted/50 transition-colors">
+                        <div className="flex justify-between items-start mb-2">
+                             <span className="bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400 text-[10px] font-bold px-1.5 py-0.5 rounded uppercase border border-yellow-200 dark:border-yellow-800">High</span>
+                            <span className="text-[10px] text-muted-foreground font-mono">INC-2847</span>
+                        </div>
+                        <p className="text-sm font-medium leading-tight mb-2 text-foreground">Database latency spike in us-east-1</p>
+                        <div className="flex items-center justify-between text-xs text-muted-foreground mt-2">
+                            <span className="flex items-center gap-1.5"><Clock className="w-3.5 h-3.5"/> 23 min</span>
+                            <div className="flex items-center gap-1.5">
+                               <div className="w-5 h-5 rounded-full bg-primary/20 flex items-center justify-center text-[10px] font-bold text-primary">SM</div>
+                               <span>Sarah M.</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Dummy Incident 2 */}
+                    <div className="p-4 hover:bg-muted/50 transition-colors">
+                        <div className="flex justify-between items-start mb-2">
+                             <span className="bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 text-[10px] font-bold px-1.5 py-0.5 rounded uppercase border border-red-200 dark:border-red-800">Critical</span>
+                            <span className="text-[10px] text-muted-foreground font-mono">INC-2846</span>
+                        </div>
+                        <p className="text-sm font-medium leading-tight mb-2 text-foreground">Payment gateway timeout errors</p>
+                        <div className="flex items-center justify-between text-xs text-muted-foreground mt-2">
+                            <span className="flex items-center gap-1.5"><Clock className="w-3.5 h-3.5"/> 45 min</span>
+                             <div className="flex items-center gap-1.5">
+                               <div className="w-5 h-5 rounded-full bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300 flex items-center justify-center text-[10px] font-bold">MC</div>
+                               <span>Mike C.</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Dummy Incident 3 */}
+                    <div className="p-4 hover:bg-muted/50 transition-colors">
+                         <div className="flex justify-between items-start mb-2">
+                            <span className="bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300 text-[10px] font-bold px-1.5 py-0.5 rounded uppercase border border-gray-200 dark:border-gray-700">Medium</span>
+                            <span className="text-[10px] text-muted-foreground font-mono">INC-2845</span>
+                        </div>
+                        <p className="text-sm font-medium leading-tight mb-2 text-foreground">CDN cache invalidation delay</p>
+                         <div className="flex items-center justify-between text-xs text-muted-foreground mt-2">
+                            <span className="flex items-center gap-1.5"><Clock className="w-3.5 h-3.5"/> 1h 12m</span>
+                            <div className="flex items-center gap-1.5">
+                               <div className="w-5 h-5 rounded-full bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300 flex items-center justify-center text-[10px] font-bold">LP</div>
+                               <span>Lisa P.</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Dummy Incident 4 */}
+                    <div className="p-4 hover:bg-muted/50 transition-colors">
+                        <div className="flex justify-between items-start mb-2">
+                             <span className="bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400 text-[10px] font-bold px-1.5 py-0.5 rounded uppercase border border-yellow-200 dark:border-yellow-800">High</span>
+                            <span className="text-[10px] text-muted-foreground font-mono">INC-2844</span>
+                        </div>
+                        <p className="text-sm font-medium leading-tight mb-2 text-foreground">API Rate limiting misconfiguration</p>
+                        <div className="flex items-center justify-between text-xs text-muted-foreground mt-2">
+                            <span className="flex items-center gap-1.5"><Clock className="w-3.5 h-3.5"/> 2h 05m</span>
+                            <div className="flex items-center gap-1.5">
+                               <div className="w-5 h-5 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 flex items-center justify-center text-[10px] font-bold">DK</div>
+                               <span>David K.</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Dummy Incident 5 */}
+                    <div className="p-4 hover:bg-muted/50 transition-colors">
+                         <div className="flex justify-between items-start mb-2">
+                            <span className="bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300 text-[10px] font-bold px-1.5 py-0.5 rounded uppercase border border-gray-200 dark:border-gray-700">Medium</span>
+                            <span className="text-[10px] text-muted-foreground font-mono">INC-2843</span>
+                        </div>
+                        <p className="text-sm font-medium leading-tight mb-2 text-foreground">Background worker queue backup</p>
+                         <div className="flex items-center justify-between text-xs text-muted-foreground mt-2">
+                            <span className="flex items-center gap-1.5"><Clock className="w-3.5 h-3.5"/> 3h 40m</span>
+                            <div className="flex items-center gap-1.5">
+                               <div className="w-5 h-5 rounded-full bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300 flex items-center justify-center text-[10px] font-bold">JL</div>
+                               <span>Jenny L.</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </CardContent>
+        </Card>
       </div>
     </div>
   );

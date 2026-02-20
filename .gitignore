@@ -39,3 +39,20 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Screen recordings
+*.mp4
+*.mov
+*.avi
+*.mkv
+Screen Recording*.mp4
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+venv/
+backend/venv/
+.venv/
+env/
